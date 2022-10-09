@@ -2,8 +2,6 @@ from absl import logging
 import numpy as np
 import tensorflow as tf
 import cv2
-from seaborn import color_palette
-from PIL import Image, ImageDraw, ImageFont
 
 YOLOV3_LAYER_LIST = [
     'yolo_darknet',
@@ -48,7 +46,7 @@ def load_darknet_weights(model, weights_file, tiny=False):
 
             filters = layer.filters
             size = layer.kernel_size[0]
-            in_dim = layer.input_shape[-1]
+            in_dim = layer.get_input_shape_at(0)[-1]
 
             if batch_norm is None:
                 conv_bias = np.fromfile(wf, dtype=np.float32, count=filters)
@@ -102,41 +100,20 @@ def broadcast_iou(box_1, box_2):
 
 
 def draw_outputs(img, outputs, class_names):
-    colors = ((np.array(color_palette("hls", 80)) * 255)).astype(np.uint8)
     boxes, objectness, classes, nums = outputs
     boxes, objectness, classes, nums = boxes[0], objectness[0], classes[0], nums[0]
     wh = np.flip(img.shape[0:2])
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(img)
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(font='./data/fonts/futur.ttf',
-                              size=(img.size[0] + img.size[1]) // 100)
     for i in range(nums):
-        color = colors[int(classes[i])]
-        x1y1 = ((np.array(boxes[i][0:2]) * wh).astype(np.int32))
-        x2y2 = ((np.array(boxes[i][2:4]) * wh).astype(np.int32))
-        thickness = (img.size[0] + img.size[1]) // 200
-        x0, y0 = x1y1[0], x1y1[1]
-        for t in np.linspace(0, 1, thickness):
-            x1y1[0], x1y1[1] = x1y1[0] - t, x1y1[1] - t
-            x2y2[0], x2y2[1] = x2y2[0] - t, x2y2[1] - t
-            draw.rectangle([x1y1[0], x1y1[1], x2y2[0], x2y2[1]], outline=tuple(color))
-        confidence = '{:.2f}%'.format(objectness[i]*100)
-        text = '{} {}'.format(class_names[int(classes[i])], confidence)
-        text_size = draw.textsize(text, font=font)
-        draw.rectangle([x0, y0 - text_size[1], x0 + text_size[0], y0],
-                        fill=tuple(color))
-        draw.text((x0, y0 - text_size[1]), text, fill='black',
-                              font=font)
-    rgb_img = img.convert('RGB')
-    img_np = np.asarray(rgb_img)
-    img = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
-
+        x1y1 = tuple((np.array(boxes[i][0:2]) * wh).astype(np.int32))
+        x2y2 = tuple((np.array(boxes[i][2:4]) * wh).astype(np.int32))
+        img = cv2.rectangle(img, x1y1, x2y2, (255, 0, 0), 2)
+        img = cv2.putText(img, '{} {:.4f}'.format(
+            class_names[int(classes[i])], objectness[i]),
+            x1y1, cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
     return img
 
 
 def draw_labels(x, y, class_names):
-    colors = ((np.array(color_palette("hls", 80)) * 255)).astype(np.uint8)
     img = x.numpy()
     boxes, classes = tf.split(y, (4, 1), axis=-1)
     classes = classes[..., 0]
@@ -147,7 +124,7 @@ def draw_labels(x, y, class_names):
         img = cv2.rectangle(img, x1y1, x2y2, (255, 0, 0), 2)
         img = cv2.putText(img, class_names[classes[i]],
                           x1y1, cv2.FONT_HERSHEY_COMPLEX_SMALL,
-                          1, (0, 0, 0), 2)
+                          1, (0, 0, 255), 2)
     return img
 
 
@@ -156,18 +133,3 @@ def freeze_all(model, frozen=True):
     if isinstance(model, tf.keras.Model):
         for l in model.layers:
             freeze_all(l, frozen)
-
-def convert_boxes(image, boxes):
-    returned_boxes = []
-    for box in boxes:
-        box[0] = (box[0] * image.shape[1]).astype(int)
-        box[1] = (box[1] * image.shape[0]).astype(int)
-        box[2] = (box[2] * image.shape[1]).astype(int)
-        box[3] = (box[3] * image.shape[0]).astype(int)
-        box[2] = int(box[2]-box[0])
-        box[3] = int(box[3]-box[1])
-        box = box.astype(int)
-        box = box.tolist()
-        if box != [0,0,0,0]:
-            returned_boxes.append(box)
-    return returned_boxes
