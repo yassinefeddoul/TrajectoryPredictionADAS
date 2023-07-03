@@ -8,5 +8,5 @@ In the Prediction.ipynb code file you'll find part:
 - Part Two, where we implemented data structuring to predict the trajectories of moving objects in real time.
 - In Part 3, we connected the camera of a mobile phone to its IP, ensuring that any camera could be connected to our algorithm for either real-time tracking or real-time prediction.
 
-Réalisé Par:
+Developed by:
 FEDDOUL YASSINE
